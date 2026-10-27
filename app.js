@@ -10,8 +10,8 @@ const store = {
 
 const IPTV = 'https://iptv-org.github.io/iptv/';
 const API = 'https://iptv-org.github.io/api/';
-const RAW = 'https://raw.githubusercontent.com/iptv-org/iptv/master/streams/';
-const DEFAULT = IPTV + 'countries/be.m3u';
+const RAW = new URL('streams/', location.href).href; // eigen kopie van iptv-org/iptv streams/
+const DEFAULT = RAW + 'be.m3u';
 
 const VRT_RADIO = [
   { name:'Radio 1', group:'VRT · voetbal live', url:'https://icecast.vrtcdn.be/radio1-high.mp3' },
@@ -123,7 +123,7 @@ async function get(url, { timeout = 15000, tries = 2, as = 'text' } = {}){
 function cleanUrl(u){
   try{
     const x = new URL(u.trim());
-    if (x.protocol === 'https:') return x.href;
+    if (x.protocol === 'https:' || x.origin === location.origin) return x.href;
     if (x.protocol === 'http:') return S.opt.http ? x.href.replace(/^http:/, 'https:') : null;
   }catch{}
   return null;
@@ -226,12 +226,8 @@ async function loadSourceLists(){
     fillSelect($('selCountry'), 'Niet beschikbaar', []); fillSelect($('selCat'), 'Niet beschikbaar', []);
   }
   try{
-    let raw = store.get('rawList', null);
-    if (!raw || Date.now() - raw.t > 864e5){
-      const j = await get('https://api.github.com/repos/iptv-org/iptv/contents/streams', { as:'json' });
-      raw = { t: Date.now(), names: j.map(f => f.name).filter(n => /^[a-z0-9_.-]+\.m3u$/i.test(n)) };
-      store.set('rawList', raw);
-    }
+    const j = await get(RAW + 'index.json', { as:'json' });
+    const raw = { names: j.filter(n => /^[a-z0-9_.-]+\.m3u$/i.test(n)) };
     fillSelect($('selRaw'), `— ${raw.names.length} lijsten —`, raw.names.map(n => [RAW + n, n.replace('.m3u', '').replace('_', ' · ').toUpperCase()]));
   }catch{
     fillSelect($('selRaw'), 'Niet beschikbaar', []);
