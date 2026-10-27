@@ -386,12 +386,16 @@ function play(c){
   const url = cleanUrl(c.url);
   if (!url){ showErr('Deze zender gebruikt een onveilige http-link en wordt overgeslagen.'); markDead(c); return; }
   const isHls = /\.m3u8(\?|$)|\/hls\//i.test(url);
-  if (isHls && !NATIVE_HLS && window.Hls && Hls.isSupported()){
+  if (isHls && window.Hls && Hls.isSupported()){
     hls = new Hls({ maxBufferLength: 20, enableWorker: false,
       xhrSetup: xhr => { xhr.withCredentials = false; } });
     hls.on(Hls.Events.ERROR, (_, d) => {
       if (!d.fatal) return;
       if (d.type === Hls.ErrorTypes.MEDIA_ERROR){ hls.recoverMediaError(); return; }
+      // CORS-blokkade of netwerkfout: probeer de eigen speler van het toestel (iPhone speelt zonder CORS)
+      if (NATIVE_HLS && d.type === Hls.ErrorTypes.NETWORK_ERROR && S.current === c){
+        hls.destroy(); hls = null; v.src = url; v.play().catch(() => {}); return;
+      }
       showErr('Stream speelt niet af (offline of geblokkeerd). Gemarkeerd als defect.');
       markDead(c);
     });
