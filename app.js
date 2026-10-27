@@ -28,9 +28,52 @@ let BLOCK = new Map(); // tvg-id -> reden (iptv-org blocklist: dmca / nsfw)
 function susReason(c){
   const b = c.id && BLOCK.get(c.id);
   if (b) return b === 'dmca' ? 'DMCA-geblokkeerd' : '18+';
-  if (SUS_URL.test(c.url)) return 'onofficiële bron';
-  if (SUS_NAME.test(c.name)) return 'betaalzender';
+  const u = c.url, n = c.name;
+  if (/[?&](username|password|user|pass)=|\/live\/[^/]+\/[^/]+\/\d+/i.test(u)) return 'login in de link (doorverkocht abonnement)';
+  if (/get\.php|player_api|m3u_plus|xtream|stalker|portal\.php/i.test(u)) return 'Xtream/Stalker-paneel (IPTV-reseller)';
+  if (/^https?:\/\/\d{1,3}(\.\d{1,3}){3}/.test(u)) return 'IP-adres i.p.v. officieel domein';
+  if (/:(25461|8080|8880|2095|2082)\//.test(u)) return 'typische reseller-poort';
+  if (/[?&]token=/i.test(u)) return 'token van iemand anders in de link';
+  if (/\b(event ?\d+|ppv)\b|\s[-–]\s.*\blive\b/i.test(n)) return 'losse wedstrijd als kanaal';
+  if (/\b(vip|backup)\b/i.test(n)) return 'reseller-label (VIP/backup)';
+  if (SUS_NAME.test(n)) return 'betaalzender gratis aangeboden';
   return '';
+}
+
+/* ---------- oefenlijst: fictieve voorbeelden om patronen te leren herkennen ----------
+   Alleen gereserveerde testadressen (RFC 5737 / 2606): 203.0.113.x, 198.51.100.x, *.example, *.invalid.
+   Niets hiervan speelt af of wijst naar een echte server. */
+const DEMO = `#EXTM3U
+#EXTINF:-1 group-title="Oefening · verdacht",DAZN 1 BE FHD
+http://203.0.113.24:8080/live/klant8812/wachtw00rd/10021.ts
+#EXTINF:-1 group-title="Oefening · verdacht",DAZN 2 BE ᴴᴰ ★VIP★
+https://cdn.iptvpro.invalid/get.php?username=demo&password=demo&type=m3u_plus&output=ts
+#EXTINF:-1 group-title="Oefening · verdacht",|BE| Jupiler Pro League 1 FHD
+http://198.51.100.7:25461/play/a0f3
+#EXTINF:-1 group-title="Oefening · verdacht",Club Brugge - Anderlecht LIVE
+https://streams.example.invalid/hls/match7/index.m3u8
+#EXTINF:-1 group-title="Oefening · verdacht",EVENT 04 (alleen tijdens wedstrijd)
+https://ppv.example.invalid/event04.m3u8
+#EXTINF:-1 group-title="Oefening · verdacht",Eleven Pro League 1 BACKUP
+https://relay.example.invalid/eleven1/master.m3u8
+#EXTINF:-1 group-title="Oefening · verdacht",Play Sports 1 (720p)
+https://edge.example.invalid/stream/ps1/master.m3u8?p=8f2a91c&u=Oleg
+#EXTINF:-1 group-title="Oefening · verdacht",Sky Sports Main Event UK
+https://tv.example.invalid/player_api.php?username=x&password=y&action=get_live_streams
+#EXTINF:-1 group-title="Oefening · verdacht",Eurosport 1 NL
+http://203.0.113.90/eurosport1/index.m3u8?token=a91f22e0
+#EXTINF:-1 group-title="Oefening · lijkt legaal",ATV Antwerpen (eigen stream omroep)
+https://live.atv.example/hls/atv/master.m3u8
+#EXTINF:-1 group-title="Oefening · lijkt legaal",Red Bull TV
+https://rbmn-live.example/hls/live/redbulltv/master.m3u8
+#EXTINF:-1 group-title="Oefening · lijkt legaal",Pluto TV Sports (FAST-kanaal)
+https://service-stitcher.example/stitch/hls/channel/sports/master.m3u8
+`;
+function loadDemo(){
+  S.opt.hideSus = false; saveOpt(); $('hideSus').checked = false;
+  $('dlg').close();
+  setList(parseM3U(DEMO).map(c => ({ ...c, demo: true })), 'oefenlijst');
+  setMeta($('meta').textContent + ' · oefenlijst: niets hiervan speelt af');
 }
 const isSus = c => !!susReason(c);
 async function loadBlocklist(){
@@ -123,6 +166,7 @@ function setList(list, label){
 }
 
 async function loadTV(src){
+  if (src === MYCH){ showMyCh(); return; }
   setMeta('Laden…'); $('list').replaceChildren();
   try{
     if (src.startsWith('local:')){
@@ -304,6 +348,85 @@ async function checkList(){
 }
 $('checkBtn').onclick = checkList;
 
+/* ---------- eigen kanalen, verbergen, bewerken ---------- */
+const MYCH = 'mych:';
+let myCh = store.get('mych', []);          // eigen kanalen
+let hidden = store.get('hidden', []);      // [{url, name}]
+let edits = store.get('edits', {});        // url -> {name, group}
+const hiddenSet = () => new Set(hidden.map(h => h.url));
+const withEdit = c => edits[c.url] ? { ...c, ...edits[c.url] } : c;
+
+function showMyCh(){
+  S.tv = myCh.slice(); S.srcLabel = 'Mijn kanalen'; S.group.tv = 'Alle'; store.set('src', MYCH);
+  if (S.tab !== 'tv') setTab('tv'); else render();
+  if (!myCh.length) setMeta('Nog geen eigen kanalen. Tik ＋ om er een toe te voegen.');
+}
+function updateMyBtn(){ $('myBtn').textContent = `Mijn kanalen (${myCh.length})`; }
+
+let edCtx = null;
+function openEd(mode, c){
+  edCtx = { mode, c };
+  const add = mode === 'add', inMine = !add && myCh.some(x => x.url === c.url);
+  $('edTitle').textContent = add ? 'Kanaal toevoegen' : c.name;
+  $('edName').value = add ? '' : c.name;
+  $('edUrl').value = add ? '' : c.url;
+  $('edUrl').readOnly = !add;
+  $('edGroup').value = add ? 'Mijn kanalen' : c.group;
+  $('edSave').textContent = add ? 'Toevoegen' : 'Opslaan';
+  $('edHide').hidden = add;
+  $('edCopy').hidden = add || inMine;
+  $('edDel').hidden = !inMine;
+  const why = !add && susReason(c);
+  $('edMsg').textContent = why ? '⚠ ' + why : '';
+  $('edDlg').showModal();
+}
+$('addBtn').onclick = () => openEd('add');
+$('edCancel').onclick = () => $('edDlg').close();
+$('edSave').onclick = () => {
+  const name = $('edName').value.trim(), group = ($('edGroup').value.trim() || 'Overig').slice(0, 60);
+  if (edCtx.mode === 'add'){
+    const raw = $('edUrl').value.trim();
+    if (!/^https?:\/\/\S+$/i.test(raw)){ $('edMsg').textContent = 'Vul een link in die met https:// begint.'; return; }
+    if (myCh.some(x => x.url === raw)){ $('edMsg').textContent = 'Dit kanaal staat al in Mijn kanalen.'; return; }
+    const c = { name: (name || decodeURIComponent(raw.split('/').pop() || '') || 'Kanaal').slice(0, 120), url: raw, group, logo:'', id:'' };
+    myCh.push(c); store.set('mych', myCh); updateMyBtn();
+    $('edDlg').close(); showMyCh();
+    const why = susReason(c); if (why) setMeta($('meta').textContent + ' · ⚠ nieuw kanaal: ' + why);
+    return;
+  }
+  const c = edCtx.c;
+  edits[c.url] = { name: (name || c.name).slice(0, 120), group }; store.set('edits', edits);
+  const i = myCh.findIndex(x => x.url === c.url);
+  if (i >= 0){ Object.assign(myCh[i], edits[c.url]); store.set('mych', myCh); }
+  $('edDlg').close(); render();
+};
+$('edHide').onclick = () => {
+  const c = edCtx.c;
+  if (!hidden.some(h => h.url === c.url)){ hidden.push({ url: c.url, name: c.name }); store.set('hidden', hidden); }
+  $('edDlg').close(); renderHidden(); render();
+};
+$('edCopy').onclick = () => {
+  const c = edCtx.c;
+  myCh.push({ name: c.name, url: c.url, group: c.group, logo: c.logo || '', id: c.id || '' }); store.set('mych', myCh);
+  updateMyBtn(); $('edMsg').textContent = 'Gekopieerd naar Mijn kanalen.'; $('edCopy').hidden = true; $('edDel').hidden = false;
+};
+$('edDel').onclick = () => {
+  const c = edCtx.c;
+  myCh = myCh.filter(x => x.url !== c.url); store.set('mych', myCh); updateMyBtn();
+  $('edDlg').close();
+  if (S.srcLabel === 'Mijn kanalen') showMyCh(); else render();
+};
+$('myBtn').onclick = () => { $('dlg').close(); showMyCh(); };
+
+function renderHidden(){
+  $('hiddenLbl').textContent = hidden.length ? `Verborgen kanalen (${hidden.length})` : 'Geen verborgen kanalen';
+  $('hiddenList').replaceChildren(...hidden.map((h, i) => {
+    const b = el('button', { type:'button', textContent:'Terugzetten' });
+    b.onclick = () => { hidden.splice(i, 1); store.set('hidden', hidden); renderHidden(); render(); };
+    return el('div', { className:'m' }, el('span', { className:'hn', textContent: h.name }), b);
+  }));
+}
+
 /* ---------- weergave ---------- */
 function setMeta(t){ $('meta').textContent = t; }
 function items(){ return S.tab === 'radio' ? (S.radio || []) : S.tv; }
@@ -319,7 +442,8 @@ function logoEl(c, cls){
 
 function render(){
   if (S.tab === 'apps') return;
-  const all = items(); const g = S.group[S.tab];
+  const hid = hiddenSet();
+  const all = items().map(withEdit).filter(c => !hid.has(c.url)); const g = S.group[S.tab];
   const groups = ['★', 'Recent', 'Alle', ...[...new Set(all.map(c => c.group))].sort()];
   $('groups').replaceChildren(...groups.map(name => {
     const b = el('button', { className: 'chip' + (name === g ? ' on' : ''), textContent: name === '★' ? '★ Favorieten' : name });
@@ -327,13 +451,13 @@ function render(){
     return b;
   }));
   const q = $('q').value.toLowerCase();
-  let list = g === 'Recent' ? S.recent.filter(c => !!c.audio === (S.tab === 'radio'))
+  let list = g === 'Recent' ? S.recent.map(withEdit).filter(c => !!c.audio === (S.tab === 'radio') && !hid.has(c.url))
            : all.filter(c => g === 'Alle' || (g === '★' ? S.favs.has(c.url) : c.group === g));
   const susCount = list.filter(isSus).length;
   list = list.filter(c => (!q || c.name.toLowerCase().includes(q)) && !(S.opt.hideDead && S.dead.has(c.url)) && !(S.opt.hideSus && isSus(c)));
   S.visible = list;
   const deadCount = all.filter(c => S.dead.has(c.url)).length;
-  setMeta(`${list.length} ${S.tab === 'radio' ? 'zenders' : 'kanalen'}` +
+  setMeta(`${list.length} ${S.tab === 'radio' ? (list.length === 1 ? 'zender' : 'zenders') : (list.length === 1 ? 'kanaal' : 'kanalen')}` +
     (deadCount ? ` · ${deadCount} defect` : '') + (susCount ? ` · ${susCount} ⚠${S.opt.hideSus ? ' verborgen' : ''}` : '') +
     (g === '★' && !list.length ? ' · tik ☆ om toe te voegen' : ''));
   const frag = document.createDocumentFragment();
@@ -344,7 +468,10 @@ function render(){
     fav.onclick = () => { S.favs.has(c.url) ? S.favs.delete(c.url) : S.favs.add(c.url); store.set('favs', [...S.favs]); paint(); };
     const t = el('div', { className:'t' }, el('div', { className:'n', textContent: c.name }), el('div', { className:'g', textContent: c.group }));
     t.onclick = () => play(c);
-    const li = el('li', {}, logoEl(c, 'logo'), t, fav);
+    const more = el('button', { className:'more', textContent:'⋯' });
+    more.setAttribute('aria-label', 'Opties voor ' + c.name);
+    more.onclick = () => openEd('edit', c);
+    const li = el('li', {}, logoEl(c, 'logo'), t, more, fav);
     if (S.current && S.current.url === c.url) li.classList.add('playing');
     if (S.dead.has(c.url)) li.classList.add('dead');
     const why = susReason(c); if (why){ li.classList.add('sus'); li.dataset.sus = why; }
@@ -359,6 +486,7 @@ function setTab(tab){
   $('appsView').hidden = tab !== 'apps';
   $('listView').hidden = tab === 'apps';
   $('srcBtn').hidden = tab !== 'tv';
+  $('addBtn').hidden = tab !== 'tv';
   $('q').placeholder = tab === 'radio' ? 'Zoek radiozender…' : 'Zoek zender…';
   if (tab === 'radio') loadRadio();
   render();
@@ -375,6 +503,7 @@ function showErr(msg){ $('err').textContent = msg; $('err').hidden = !msg; $('do
 function markDead(c){ if (!c) return; S.dead.add(c.url); store.set('dead', [...S.dead]); render(); }
 
 function play(c){
+  if (c.demo){ showErr('Oefenvoorbeeld: ' + (susReason(c) || 'geen alarmsignalen, zo ziet een officiële stream eruit') + '. Dit speelt niet af.'); return; }
   S.current = c;
   S.recent = [c, ...S.recent.filter(x => x.url !== c.url)].slice(0, 30);
   store.set('recent', S.recent); store.set('last', c);
@@ -446,6 +575,7 @@ bindOpt('hideDead', 'hideDead', render);
 bindOpt('hideSus', 'hideSus', render);
 bindOpt('optLogos', 'logos', () => { render(); if (S.current) setNow(S.current); });
 bindOpt('optHttp', 'http');
+$('demoBtn').onclick = loadDemo;
 let clearArmed = false;
 $('clearData').onclick = () => {
   if (!clearArmed){ clearArmed = true; $('clearData').textContent = 'Zeker? Tik nogmaals om alles te wissen'; setTimeout(() => { clearArmed = false; $('clearData').textContent = 'Alle lokale gegevens wissen'; }, 4000); return; }
@@ -456,6 +586,8 @@ $('clearData').onclick = () => {
 
 /* ---------- start ---------- */
 renderMine();
+renderHidden();
+updateMyBtn();
 const last = store.get('last', null);
 if (last){ S.current = last; setNow(last, last.group + ' · tik om te spelen'); }
 loadTV(store.get('src', DEFAULT));

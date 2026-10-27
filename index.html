@@ -36,6 +36,7 @@
   <section id="listView">
     <div class="controls">
       <input id="q" type="search" placeholder="Zoek…" autocomplete="off">
+      <button id="addBtn" aria-label="Kanaal toevoegen">＋</button>
       <button id="srcBtn">Bron</button>
     </div>
     <div class="row" id="groups"></div>
@@ -68,6 +69,7 @@
 <dialog id="dlg">
   <form method="dialog" class="src">
     <strong>Bron kiezen</strong>
+    <button type="button" id="myBtn" class="primary">Mijn kanalen (0)</button>
     <label class="chk"><input type="checkbox" id="optMerge"> Samenvoegen met huidige lijst <span class="hint">(dubbels worden weggelaten)</span></label>
     <div class="quick">
       <button value="https://iptv-org.github.io/iptv/countries/be.m3u">België</button>
@@ -138,6 +140,9 @@
       <div class="scan">
         <label class="chk"><input type="checkbox" id="optLogos"> Zenderlogo's laden <span class="hint">(logo-servers zien dan je IP)</span></label>
         <label class="chk"><input type="checkbox" id="optHttp"> http-streams via https proberen <span class="hint">(anders worden ze overgeslagen)</span></label>
+        <div class="lbl" id="hiddenLbl"></div>
+        <div class="mine" id="hiddenList"></div>
+        <button type="button" id="demoBtn">Oefenlijst: verdachte links leren herkennen</button>
         <button type="button" id="clearData">Alle lokale gegevens wissen</button>
         <div class="hint" id="clearMsg"></div>
       </div>
@@ -145,6 +150,26 @@
 
     <button value="">Sluiten</button>
   </form>
+</dialog>
+
+<dialog id="edDlg">
+  <div class="src">
+    <strong id="edTitle">Kanaal</strong>
+    <label class="lbl" for="edName">Naam</label>
+    <input id="edName" type="text" maxlength="120">
+    <label class="lbl" for="edUrl">Streamlink</label>
+    <input id="edUrl" type="url" placeholder="https://…/index.m3u8">
+    <label class="lbl" for="edGroup">Groep</label>
+    <input id="edGroup" type="text" maxlength="60">
+    <div class="hint" id="edMsg"></div>
+    <button type="button" id="edSave" class="primary">Opslaan</button>
+    <div class="quick">
+      <button type="button" id="edCopy">Naar Mijn kanalen</button>
+      <button type="button" id="edHide">Verbergen</button>
+      <button type="button" id="edDel">Verwijderen uit Mijn kanalen</button>
+    </div>
+    <button type="button" id="edCancel">Annuleren</button>
+  </div>
 </dialog>
 
 <script src="hls.min.js"></script>
