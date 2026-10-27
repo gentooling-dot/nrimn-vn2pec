@@ -6,13 +6,14 @@
 <meta name="theme-color" content="#0f1216">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="manifest.json">
 <title>Zender</title>
 <style>
-/* Layout: speler bovenaan (sticky), daaronder zoek + filter + zenderlijst */
+/* Layout: sticky speler + nu-balk, tabs (TV / Radio / Apps), daaronder lijst */
 :root{
-  --bg:#0f1216; --panel:#171b21; --line:#262c35; --fg:#e8ebef; --dim:#8b95a3;
-  --accent:#4fb3a9; --live:#e5484d;
+  --bg:#0f1216; --panel:#171b21; --panel2:#1e232b; --line:#262c35; --fg:#e8ebef; --dim:#8b95a3;
+  --accent:#4fb3a9; --live:#e5484d; --warn:#e0a84f;
   --sans: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   color-scheme:dark;
 }
@@ -21,71 +22,120 @@ html,body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 var(--sans
 body{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 .wrap{padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
 header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
-.player{position:relative;aspect-ratio:16/9;background:#000;max-height:45vh;width:100%}
+.player{position:relative;aspect-ratio:16/9;background:#000;max-height:42vh;width:100%}
+.player.audio{aspect-ratio:auto;height:64px}
 video{width:100%;height:100%;display:block;background:#000}
 .now{display:flex;align-items:center;gap:10px;padding-block:8px}
 .now img{width:32px;height:32px;object-fit:contain;border-radius:6px;background:var(--panel)}
 .now .t{flex:1;min-width:0}
 .now .n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.now .s{color:var(--dim);font-size:12px}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+.now .s{color:var(--dim);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav{display:flex;gap:4px}
+.nav button{padding:6px 10px;font-size:16px;line-height:1}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex:none}
 .dot.on{background:var(--live);box-shadow:0 0 0 3px #e5484d33}
 .err{color:#ffb4b4;font-size:13px;padding-bottom:8px}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding-bottom:8px}
+.tabs button{border-radius:8px;padding:8px;color:var(--dim)}
+.tabs button[aria-selected="true"]{color:var(--fg);background:var(--panel2);border-color:var(--accent)}
 .controls{display:grid;grid-template-columns:1fr auto;gap:8px;padding-block:10px}
 input,select,button{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
 button{cursor:pointer}
-button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .row{display:flex;gap:8px;overflow-x:auto;padding-bottom:10px;scrollbar-width:none}
-.chip{white-space:nowrap;border-radius:999px;padding:6px 12px;font-size:13px;background:var(--panel);border:1px solid var(--line);color:var(--dim)}
+.row::-webkit-scrollbar{display:none}
+.chip{white-space:nowrap;border-radius:999px;padding:6px 12px;font-size:13px;color:var(--dim)}
 .chip.on{color:var(--bg);background:var(--accent);border-color:var(--accent)}
 ul{list-style:none;margin:0;padding:0}
 li{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
 li .logo{width:40px;height:40px;flex:none;border-radius:8px;background:var(--panel);object-fit:contain}
 li .t{flex:1;min-width:0;cursor:pointer}
 li .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-li .g{color:var(--dim);font-size:12px}
+li .g{color:var(--dim);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 li.playing .n{color:var(--accent);font-weight:600}
+li.dead .n{color:var(--dim);text-decoration:line-through}
 .fav{background:none;border:0;font-size:20px;color:var(--dim);padding:6px}
 .fav.on{color:#f5c451}
-.meta{color:var(--dim);font-size:12px;padding-block:6px}
-dialog{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:14px;width:min(92vw,420px)}
+.meta{color:var(--dim);font-size:12px;padding-block:6px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.meta label{display:flex;gap:6px;align-items:center;white-space:nowrap}
+.apps{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;padding-block:12px}
+.app{display:flex;flex-direction:column;gap:4px;padding:14px;border-radius:12px;background:var(--panel);border:1px solid var(--line);color:var(--fg);text-decoration:none}
+.app b{font-size:15px}
+.app span{color:var(--dim);font-size:12px}
+.app.sport{border-color:#4fb3a955}
+.note{color:var(--dim);font-size:12px;padding-bottom:16px}
+dialog{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:14px;width:min(94vw,440px);max-height:85vh}
 dialog::backdrop{background:#000a}
 .src{display:grid;gap:8px}
+.src .quick{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .src button{text-align:left}
+.src .lbl{color:var(--dim);font-size:12px;margin-top:4px}
 </style>
 </head>
 <body>
 <header>
-  <div class="player"><video id="v" controls playsinline></video></div>
+  <div class="player" id="pl"><video id="v" controls playsinline></video></div>
   <div class="wrap">
-    <div class="now"><img id="nlogo" alt=""><div class="t"><div class="n" id="nname">Kies een zender</div><div class="s" id="nsub">—</div></div><span class="dot" id="dot"></span></div>
+    <div class="now">
+      <img id="nlogo" alt="">
+      <div class="t"><div class="n" id="nname">Kies een zender</div><div class="s" id="nsub">—</div></div>
+      <span class="dot" id="dot"></span>
+      <div class="nav"><button id="prev" aria-label="Vorige zender">‹</button><button id="next" aria-label="Volgende zender">›</button></div>
+    </div>
     <div class="err" id="err" hidden></div>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="tv" aria-selected="true">TV</button>
+      <button role="tab" data-tab="radio" aria-selected="false">Radio</button>
+      <button role="tab" data-tab="apps" aria-selected="false">Apps</button>
+    </div>
   </div>
 </header>
+
 <main class="wrap">
-  <div class="controls">
-    <input id="q" type="search" placeholder="Zoek zender…" autocomplete="off">
-    <button id="srcBtn" aria-label="Bron kiezen">Bron</button>
-  </div>
-  <div class="row" id="groups"></div>
-  <div class="meta" id="meta">Laden…</div>
-  <ul id="list"></ul>
+  <section id="listView">
+    <div class="controls">
+      <input id="q" type="search" placeholder="Zoek…" autocomplete="off">
+      <button id="srcBtn">Bron</button>
+    </div>
+    <div class="row" id="groups"></div>
+    <div class="meta"><span id="meta">Laden…</span><label><input type="checkbox" id="hideDead"> verberg defect</label></div>
+    <ul id="list"></ul>
+  </section>
+
+  <section id="appsView" hidden>
+    <div class="apps">
+      <a class="app sport" href="https://www.dazn.com/nl-BE/home" target="_blank" rel="noopener"><b>DAZN</b><span>Jupiler Pro League live</span></a>
+      <a class="app sport" href="https://sporza.be/nl/matchcenter/voetbal/" target="_blank" rel="noopener"><b>Sporza</b><span>Livetekst, samenvattingen, goals</span></a>
+      <a class="app sport" href="https://www.goplay.be/play-sports" target="_blank" rel="noopener"><b>Play Sports</b><span>Croky Cup, buitenlands voetbal</span></a>
+      <a class="app" href="https://www.vrt.be/vrtmax/" target="_blank" rel="noopener"><b>VRT MAX</b><span>Eén, Canvas, Ketnet</span></a>
+      <a class="app" href="https://www.vtmgo.be/" target="_blank" rel="noopener"><b>VTM GO</b><span>VTM, VTM 2–4</span></a>
+      <a class="app" href="https://www.goplay.be/" target="_blank" rel="noopener"><b>GoPlay</b><span>Play4, Play5, Play6</span></a>
+      <a class="app" href="https://www.streamz.be/" target="_blank" rel="noopener"><b>Streamz</b><span>Series en films</span></a>
+      <a class="app" href="https://www.pickx.be/" target="_blank" rel="noopener"><b>Pickx</b><span>Proximus tv</span></a>
+    </div>
+    <p class="note">Opent de officiële site of app met je eigen account. Voetbal live op de radio: Radio 1 staat bij het tabblad Radio.</p>
+  </section>
 </main>
 
 <dialog id="dlg">
-  <form method="dialog" class="src" id="srcForm">
-    <strong>Playlist kiezen</strong>
-    <button value="https://iptv-org.github.io/iptv/countries/be.m3u">🇧🇪 België</button>
-    <button value="https://iptv-org.github.io/iptv/countries/nl.m3u">🇳🇱 Nederland</button>
-    <button value="https://iptv-org.github.io/iptv/languages/nld.m3u">Nederlandstalig</button>
-    <button value="https://iptv-org.github.io/iptv/categories/news.m3u">Nieuws (wereld)</button>
-    <button value="https://iptv-org.github.io/iptv/categories/sports.m3u">Sport (wereld)</button>
-    <button value="https://iptv-org.github.io/iptv/categories/movies.m3u">Films (wereld)</button>
-    <button value="https://iptv-org.github.io/iptv/index.m3u">Alles (groot, ~10k)</button>
-    <label for="custom" class="meta">Eigen M3U-link</label>
+  <form method="dialog" class="src">
+    <strong>Bron kiezen</strong>
+    <div class="quick">
+      <button value="https://iptv-org.github.io/iptv/countries/be.m3u">België</button>
+      <button value="https://iptv-org.github.io/iptv/countries/nl.m3u">Nederland</button>
+      <button value="https://iptv-org.github.io/iptv/languages/nld.m3u">Nederlandstalig</button>
+      <button value="https://iptv-org.github.io/iptv/categories/sports.m3u">Sport</button>
+      <button value="https://iptv-org.github.io/iptv/categories/news.m3u">Nieuws</button>
+      <button value="https://iptv-org.github.io/iptv/categories/movies.m3u">Films</button>
+    </div>
+    <label class="lbl" for="selCountry">Land</label>
+    <select id="selCountry"><option value="">Laden…</option></select>
+    <label class="lbl" for="selCat">Categorie</label>
+    <select id="selCat"><option value="">Laden…</option></select>
+    <label class="lbl" for="custom">Eigen M3U-link</label>
     <input id="custom" type="url" placeholder="https://…/playlist.m3u">
     <button value="custom">Laden</button>
-    <button value="">Annuleren</button>
+    <button value="">Sluiten</button>
   </form>
 </dialog>
 
@@ -96,9 +146,32 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d }catch{ return d } },
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)) }catch{} }
 };
-const DEFAULT = 'https://iptv-org.github.io/iptv/countries/be.m3u';
-let channels = [], group = '★', favs = new Set(store.get('favs', [])), hls = null, current = null;
+const IPTV = 'https://iptv-org.github.io/iptv/';
+const API = 'https://iptv-org.github.io/api/';
+const DEFAULT = IPTV + 'countries/be.m3u';
 
+// Vaste Vlaamse radiozenders (VRT, publieke streams) bovenaan
+const VRT_RADIO = [
+  { name:'Radio 1', group:'VRT · voetbal live', url:'https://icecast.vrtcdn.be/radio1-high.mp3' },
+  { name:'Radio 2', group:'VRT', url:'https://icecast.vrtcdn.be/ra2ant-high.mp3' },
+  { name:'Studio Brussel', group:'VRT', url:'https://icecast.vrtcdn.be/stubru-high.mp3' },
+  { name:'MNM', group:'VRT', url:'https://icecast.vrtcdn.be/mnm-high.mp3' },
+  { name:'Klara', group:'VRT', url:'https://icecast.vrtcdn.be/klara-high.mp3' },
+].map(s => ({ ...s, logo:'', audio:true }));
+
+const S = {
+  tab: 'tv',
+  tv: [], radio: null,
+  group: { tv:'Alle', radio:'Alle' },
+  favs: new Set(store.get('favs', [])),
+  dead: new Set(store.get('dead', [])),
+  recent: store.get('recent', []),
+  current: null, visible: [],
+};
+let hls = null;
+$('hideDead').checked = store.get('hideDead', true);
+
+/* ---------- data ---------- */
 function parseM3U(txt){
   const out = []; let cur = null;
   for (const raw of txt.split(/\r?\n/)){
@@ -114,92 +187,203 @@ function parseM3U(txt){
   return out;
 }
 
-async function load(url){
-  $('meta').textContent = 'Laden…'; $('list').innerHTML = '';
+async function loadTV(url){
+  setMeta('Laden…'); $('list').innerHTML = '';
   try{
     const r = await fetch(url);
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    channels = parseM3U(await r.text());
+    S.tv = parseM3U(await r.text());
     store.set('src', url);
-    if (group !== '★' || !channels.some(c => favs.has(c.url))) group = 'Alle';
-    render();
+    S.group.tv = 'Alle';
+    if (S.tab === 'tv') render();
   }catch(e){
-    $('meta').textContent = 'Kon playlist niet laden (' + e.message + '). Probeer een andere bron.';
+    setMeta('Kon playlist niet laden (' + e.message + '). Kies een andere bron.');
   }
 }
 
+async function loadRadio(){
+  if (S.radio) return;
+  S.radio = [...VRT_RADIO];
+  render();
+  try{
+    const r = await fetch('https://de1.api.radio-browser.info/json/stations/search?countrycode=BE&hidebroken=true&order=clickcount&reverse=true&limit=300');
+    const data = await r.json();
+    const seen = new Set(S.radio.map(s => s.name.toLowerCase()));
+    for (const s of data){
+      const url = s.url_resolved || s.url;
+      if (!url || !url.startsWith('https:')) continue;
+      const key = s.name.trim().toLowerCase();
+      if (seen.has(key)) continue; seen.add(key);
+      const tag = (s.tags || '').split(',')[0];
+      S.radio.push({ name: s.name.trim(), logo: s.favicon && s.favicon.startsWith('https:') ? s.favicon : '',
+                     group: tag ? tag[0].toUpperCase() + tag.slice(1) : 'Overig', url, audio: true });
+    }
+  }catch{}
+  if (S.tab === 'radio') render();
+}
+
+async function loadSourceLists(){
+  try{
+    const [countries, cats] = await Promise.all([
+      fetch(API + 'countries.json').then(r => r.json()),
+      fetch(API + 'categories.json').then(r => r.json()),
+    ]);
+    $('selCountry').innerHTML = '<option value="">— kies land —</option>' + countries
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(c => `<option value="${IPTV}countries/${c.code.toLowerCase()}.m3u">${c.flag || ''} ${c.name}</option>`).join('');
+    $('selCat').innerHTML = '<option value="">— kies categorie —</option>' + cats
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(c => `<option value="${IPTV}categories/${c.id}.m3u">${c.name}</option>`).join('');
+  }catch{
+    $('selCountry').innerHTML = $('selCat').innerHTML = '<option value="">Niet beschikbaar</option>';
+  }
+}
+
+/* ---------- render ---------- */
+function setMeta(t){ $('meta').textContent = t; }
+function items(){ return S.tab === 'radio' ? (S.radio || []) : S.tv; }
+
 function render(){
-  const groups = ['★', 'Alle', ...[...new Set(channels.map(c => c.group))].sort()];
-  $('groups').innerHTML = '';
-  for (const g of groups){
+  if (S.tab === 'apps') return;
+  const all = items();
+  const g = S.group[S.tab];
+  const groups = ['★', 'Recent', 'Alle', ...[...new Set(all.map(c => c.group))].sort()];
+  const gEl = $('groups'); gEl.innerHTML = '';
+  for (const name of groups){
     const b = document.createElement('button');
-    b.className = 'chip' + (g === group ? ' on' : ''); b.textContent = g === '★' ? '★ Favorieten' : g;
-    b.onclick = () => { group = g; render(); };
-    $('groups').append(b);
+    b.className = 'chip' + (name === g ? ' on' : '');
+    b.textContent = name === '★' ? '★ Favorieten' : name;
+    b.onclick = () => { S.group[S.tab] = name; render(); };
+    gEl.append(b);
   }
   const q = $('q').value.toLowerCase();
-  const list = channels.filter(c =>
-    (group === 'Alle' || (group === '★' ? favs.has(c.url) : c.group === group)) &&
-    (!q || c.name.toLowerCase().includes(q)));
-  $('meta').textContent = list.length + ' zenders' + (group === '★' && !list.length ? ' — tik ☆ om favorieten toe te voegen' : '');
+  const hide = $('hideDead').checked;
+  let list;
+  if (g === 'Recent') list = S.recent.filter(c => !!c.audio === (S.tab === 'radio'));
+  else list = all.filter(c => g === 'Alle' || (g === '★' ? S.favs.has(c.url) : c.group === g));
+  list = list.filter(c => (!q || c.name.toLowerCase().includes(q)) && !(hide && S.dead.has(c.url)));
+  S.visible = list;
+  const deadCount = all.filter(c => S.dead.has(c.url)).length;
+  setMeta(list.length + (S.tab === 'radio' ? ' zenders' : ' kanalen') + (deadCount ? ` · ${deadCount} defect` : '') +
+    (g === '★' && !list.length ? ' · tik ☆ om toe te voegen' : ''));
   const frag = document.createDocumentFragment();
   for (const c of list.slice(0, 600)){
     const li = document.createElement('li');
-    if (current && current.url === c.url) li.className = 'playing';
-    li.innerHTML = `<img class="logo" loading="lazy" alt=""><div class="t"><div class="n"></div><div class="g"></div></div><button class="fav" aria-label="Favoriet"></button>`;
+    if (S.current && S.current.url === c.url) li.classList.add('playing');
+    if (S.dead.has(c.url)) li.classList.add('dead');
+    li.innerHTML = '<img class="logo" loading="lazy" alt=""><div class="t"><div class="n"></div><div class="g"></div></div><button class="fav" aria-label="Favoriet"></button>';
     const img = li.querySelector('img');
-    if (c.logo) { img.src = c.logo; img.onerror = () => img.removeAttribute('src'); }
+    if (c.logo){ img.src = c.logo; img.onerror = () => img.removeAttribute('src'); }
     li.querySelector('.n').textContent = c.name;
     li.querySelector('.g').textContent = c.group;
     li.querySelector('.t').onclick = () => play(c);
     const f = li.querySelector('.fav');
-    const paint = () => { f.textContent = favs.has(c.url) ? '★' : '☆'; f.classList.toggle('on', favs.has(c.url)); };
+    const paint = () => { const on = S.favs.has(c.url); f.textContent = on ? '★' : '☆'; f.classList.toggle('on', on); };
     paint();
-    f.onclick = () => { favs.has(c.url) ? favs.delete(c.url) : favs.add(c.url); store.set('favs', [...favs]); paint(); };
+    f.onclick = () => { S.favs.has(c.url) ? S.favs.delete(c.url) : S.favs.add(c.url); store.set('favs', [...S.favs]); paint(); };
     frag.append(li);
   }
   $('list').replaceChildren(frag);
 }
 
-function showErr(msg){ $('err').textContent = msg; $('err').hidden = !msg; $('dot').classList.toggle('on', !msg && !!current); }
+function setTab(tab){
+  S.tab = tab;
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
+  $('appsView').hidden = tab !== 'apps';
+  $('listView').hidden = tab === 'apps';
+  $('srcBtn').hidden = tab !== 'tv';
+  $('q').placeholder = tab === 'radio' ? 'Zoek radiozender…' : 'Zoek zender…';
+  if (tab === 'radio') loadRadio();
+  render();
+}
+
+/* ---------- playback ---------- */
+function showErr(msg){ $('err').textContent = msg; $('err').hidden = !msg; $('dot').classList.toggle('on', !msg && !!S.current); }
+
+function markDead(c){
+  if (!c) return;
+  S.dead.add(c.url); store.set('dead', [...S.dead]);
+  render();
+}
 
 function play(c){
-  current = c; store.set('last', c);
+  S.current = c;
+  S.recent = [c, ...S.recent.filter(x => x.url !== c.url)].slice(0, 30);
+  store.set('recent', S.recent); store.set('last', c);
   $('nname').textContent = c.name; $('nsub').textContent = c.group;
   $('nlogo').src = c.logo || ''; showErr('');
+  $('pl').classList.toggle('audio', !!c.audio);
   const v = $('v');
   if (hls){ hls.destroy(); hls = null; }
-  if (location.protocol === 'https:' && c.url.startsWith('http:')){
-    showErr('Deze zender gebruikt http:// en wordt door de browser geblokkeerd op een https-pagina. Kies een andere.');
+  v.removeAttribute('src'); v.load();
+  if (c.url.startsWith('http:')){
+    showErr('Deze zender gebruikt http:// en wordt door de browser geblokkeerd. Kies een andere.');
+    markDead(c); return;
   }
-  if (window.Hls && Hls.isSupported() && /\.m3u8|\/hls|playlist/i.test(c.url)){
+  const isHls = /\.m3u8(\?|$)|\/hls\//i.test(c.url);
+  if (isHls && window.Hls && Hls.isSupported()){
     hls = new Hls({ maxBufferLength: 20 });
     hls.on(Hls.Events.ERROR, (_, d) => {
       if (!d.fatal) return;
       if (d.type === Hls.ErrorTypes.MEDIA_ERROR){ hls.recoverMediaError(); return; }
-      showErr('Stream speelt niet af (offline of geblokkeerd voor browsers). Probeer een andere zender.');
+      showErr('Stream speelt niet af (offline of geblokkeerd). Gemarkeerd als defect.');
+      markDead(c);
     });
     hls.loadSource(c.url); hls.attachMedia(v);
   } else {
     v.src = c.url;
   }
-  v.play().then(() => $('dot').classList.add('on')).catch(() => {});
+  v.play().then(() => {
+    $('dot').classList.add('on');
+    if (S.dead.delete(c.url)) store.set('dead', [...S.dead]);
+  }).catch(() => {});
   render();
 }
 
-document.querySelector('.now').onclick = () => { if (current && !hls && !$('v').src) play(current); };
-$('v').addEventListener('error', () => showErr('Stream speelt niet af. Probeer een andere zender.'));
+function step(dir){
+  const list = S.visible.length ? S.visible : items();
+  if (!list.length) return;
+  const i = S.current ? list.findIndex(c => c.url === S.current.url) : -1;
+  play(list[(i + dir + list.length) % list.length]);
+}
+
+$('v').addEventListener('error', () => {
+  if (!S.current || hls) return;
+  showErr('Stream speelt niet af. Gemarkeerd als defect.');
+  markDead(S.current);
+});
+$('v').addEventListener('playing', () => showErr(''));
+
+/* ---------- events ---------- */
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+$('prev').onclick = () => step(-1);
+$('next').onclick = () => step(1);
 $('q').addEventListener('input', render);
+$('hideDead').addEventListener('change', () => { store.set('hideDead', $('hideDead').checked); render(); });
 $('srcBtn').onclick = () => $('dlg').showModal();
+$('selCountry').onchange = e => { if (e.target.value){ $('dlg').close(e.target.value); e.target.value = ''; } };
+$('selCat').onchange = e => { if (e.target.value){ $('dlg').close(e.target.value); e.target.value = ''; } };
 $('dlg').addEventListener('close', () => {
-  const v = $('dlg').returnValue;
-  if (v === 'custom'){ const u = $('custom').value.trim(); if (u) load(u); }
-  else if (v) load(v);
+  const v = $('dlg').returnValue; $('dlg').returnValue = '';
+  if (v === 'custom'){ const u = $('custom').value.trim(); if (u) loadTV(u); }
+  else if (v) loadTV(v);
+});
+document.querySelector('.now .t').onclick = () => { if (S.current && $('v').paused && !$('v').currentSrc) play(S.current); };
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input,select')) return;
+  if (e.key === 'ArrowRight') step(1);
+  if (e.key === 'ArrowLeft') step(-1);
 });
 
+/* ---------- start ---------- */
 const last = store.get('last', null);
-if (last){ current = last; $('nname').textContent = last.name; $('nsub').textContent = last.group + ' · tik om te spelen'; $('nlogo').src = last.logo || ''; }
-load(store.get('src', DEFAULT));
+if (last){
+  S.current = last;
+  $('nname').textContent = last.name; $('nsub').textContent = last.group + ' · tik om te spelen';
+  $('nlogo').src = last.logo || '';
+}
+loadTV(store.get('src', DEFAULT));
+loadSourceLists();
 </script>
 </body>
 </html>
