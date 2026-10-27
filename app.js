@@ -155,6 +155,15 @@ function toM3U(list){
 }
 
 /* ---------- bronnen laden ---------- */
+function srcName(src){
+  if (!src) return '';
+  if (src === MYCH) return 'Mijn kanalen';
+  if (src.startsWith('local:')) return src.slice(6);
+  const m = mine.find(x => x.url === src); if (m) return m.name;
+  const btn = [...document.querySelectorAll('#dlg button[value]')].find(b => b.value === src); if (btn) return btn.textContent;
+  for (const id of ['selCountry', 'selCat', 'selRaw']){ const o = [...$(id).options].find(o => o.value === src); if (o) return o.textContent.trim(); }
+  try{ return decodeURIComponent(new URL(src).pathname.split('/').pop()).replace(/\.m3u8?$/, ''); }catch{ return src; }
+}
 function setList(list, label){
   if ($('optMerge').checked && S.tv.length){
     const have = new Set(S.tv.map(c => c.url));
@@ -177,7 +186,7 @@ async function loadTV(src){
       const url = cleanUrl(src); if (!url) throw new Error('ongeldige link');
       setList(parseM3U(await get(url)), url);
     }
-    store.set('src', src);
+    store.set('src', src); render();
   }catch(e){
     setMeta('Kon lijst niet laden (' + e.message + '). Kies een andere bron.');
   }
@@ -357,9 +366,9 @@ const hiddenSet = () => new Set(hidden.map(h => h.url));
 const withEdit = c => edits[c.url] ? { ...c, ...edits[c.url] } : c;
 
 function showMyCh(){
-  S.tv = myCh.slice(); S.srcLabel = 'Mijn kanalen'; S.group.tv = 'Alle'; store.set('src', MYCH);
+  S.tv = myCh.slice(); S.srcLabel = 'Mijn kanalen'; S.group.tv = 'Alle';
+  if (myCh.length) store.set('src', MYCH); // lege eigen lijst nooit als startlijst bewaren
   if (S.tab !== 'tv') setTab('tv'); else render();
-  if (!myCh.length) setMeta('Nog geen eigen kanalen. Tik ＋ om er een toe te voegen.');
 }
 function updateMyBtn(){ $('myBtn').textContent = `Mijn kanalen (${myCh.length})`; }
 
@@ -478,6 +487,16 @@ function render(){
     frag.append(li);
   }
   $('list').replaceChildren(frag);
+  if (S.tab === 'tv'){
+    const name = S.srcLabel === 'Mijn kanalen' ? 'Mijn kanalen' : S.srcLabel === 'samengevoegd' ? 'Samengevoegde lijst' : S.srcLabel === 'oefenlijst' ? 'Oefenlijst' : srcName(store.get('src', '')) || S.srcLabel;
+    $('srcName').textContent = name ? 'Lijst: ' + name : '';
+    if (!list.length && !$('q').value && g === 'Alle'){
+      const back = el('button', { type:'button', textContent:'Terug naar België' });
+      back.onclick = () => loadTV(DEFAULT);
+      const msg = S.srcLabel === 'Mijn kanalen' ? 'Je eigen lijst is nog leeg. Tik ＋ om een kanaal toe te voegen, of:' : 'Deze lijst is leeg (of alles is verborgen).';
+      $('list').replaceChildren(el('li', { className:'empty' }, el('div', { className:'t' }, el('div', { className:'g', textContent: msg })), back));
+    }
+  } else $('srcName').textContent = '';
 }
 
 function setTab(tab){
@@ -590,6 +609,6 @@ renderHidden();
 updateMyBtn();
 const last = store.get('last', null);
 if (last){ S.current = last; setNow(last, last.group + ' · tik om te spelen'); }
-loadTV(store.get('src', DEFAULT));
+{ const src = store.get('src', DEFAULT); loadTV(src === MYCH && !myCh.length ? DEFAULT : src); }
 loadSourceLists();
 loadBlocklist();
