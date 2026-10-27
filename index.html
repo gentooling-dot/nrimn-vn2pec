@@ -71,6 +71,9 @@ dialog::backdrop{background:#000a}
 .src .quick{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .src button{text-align:left}
 .src .lbl{color:var(--dim);font-size:12px;margin-top:4px}
+.mine{display:grid;gap:6px}
+.mine .m{display:grid;grid-template-columns:1fr auto;gap:6px}
+.mine .m button:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -129,13 +132,27 @@ dialog::backdrop{background:#000a}
       <button value="https://iptv-org.github.io/iptv/categories/news.m3u">Nieuws</button>
       <button value="https://iptv-org.github.io/iptv/categories/movies.m3u">Films</button>
     </div>
+    <div class="lbl">Gratis streamingdiensten</div>
+    <div class="quick">
+      <button value="https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8">Free-TV (wereld)</button>
+      <button value="https://raw.githubusercontent.com/iptv-org/iptv/master/streams/be_samsung.m3u">Samsung TV+ BE</button>
+      <button value="https://raw.githubusercontent.com/iptv-org/iptv/master/streams/nl_samsung.m3u">Samsung TV+ NL</button>
+      <button value="https://raw.githubusercontent.com/iptv-org/iptv/master/streams/de_pluto.m3u">Pluto TV DE</button>
+      <button value="https://raw.githubusercontent.com/iptv-org/iptv/master/streams/de_rakuten.m3u">Rakuten TV DE</button>
+      <button value="https://raw.githubusercontent.com/iptv-org/iptv/master/streams/uk_pluto.m3u">Pluto TV UK</button>
+    </div>
     <label class="lbl" for="selCountry">Land</label>
     <select id="selCountry"><option value="">Laden…</option></select>
     <label class="lbl" for="selCat">Categorie</label>
     <select id="selCat"><option value="">Laden…</option></select>
-    <label class="lbl" for="custom">Eigen M3U-link</label>
+    <label class="lbl" for="selRaw">Alle losse lijsten (iptv-org)</label>
+    <select id="selRaw"><option value="">Laden…</option></select>
+    <div class="lbl" id="mineLbl" hidden>Mijn links</div>
+    <div class="mine" id="mine"></div>
+    <label class="lbl" for="custom">Eigen M3U-link (wordt bewaard)</label>
     <input id="custom" type="url" placeholder="https://…/playlist.m3u">
-    <button value="custom">Laden</button>
+    <input id="customName" type="text" placeholder="Naam (optioneel)">
+    <button value="custom">Laden en bewaren</button>
     <button value="">Sluiten</button>
   </form>
 </dialog>
@@ -238,7 +255,41 @@ async function loadSourceLists(){
   }catch{
     $('selCountry').innerHTML = $('selCat').innerHTML = '<option value="">Niet beschikbaar</option>';
   }
+  // Alle losse bestanden uit iptv-org/iptv/streams (1 dag gecachet i.v.m. GitHub-limiet)
+  try{
+    let raw = store.get('rawList', null);
+    if (!raw || Date.now() - raw.t > 864e5){
+      const j = await fetch('https://api.github.com/repos/iptv-org/iptv/contents/streams').then(r => r.json());
+      raw = { t: Date.now(), names: j.map(f => f.name).filter(n => n.endsWith('.m3u')) };
+      store.set('rawList', raw);
+    }
+    $('selRaw').innerHTML = `<option value="">— ${raw.names.length} lijsten —</option>` + raw.names
+      .map(n => `<option value="https://raw.githubusercontent.com/iptv-org/iptv/master/streams/${n}">${n.replace('.m3u','').replace('_',' · ').toUpperCase()}</option>`).join('');
+  }catch{
+    $('selRaw').innerHTML = '<option value="">Niet beschikbaar</option>';
+  }
 }
+
+/* ---------- eigen links ---------- */
+let mine = store.get('mine', []);
+function renderMine(){
+  $('mineLbl').hidden = !mine.length;
+  $('mine').replaceChildren(...mine.map((m, i) => {
+    const row = document.createElement('div'); row.className = 'm';
+    const go = document.createElement('button'); go.type = 'button'; go.textContent = m.name;
+    go.onclick = () => $('dlg').close(m.url);
+    const del = document.createElement('button'); del.type = 'button'; del.textContent = '✕'; del.setAttribute('aria-label', 'Verwijder ' + m.name);
+    del.onclick = () => { mine.splice(i, 1); store.set('mine', mine); renderMine(); };
+    row.append(go, del); return row;
+  }));
+}
+function saveMine(url, name){
+  if (mine.some(m => m.url === url)) return;
+  let label = name;
+  if (!label){ try{ label = new URL(url).pathname.split('/').pop() || new URL(url).host; }catch{ label = url; } }
+  mine.push({ url, name: label }); store.set('mine', mine); renderMine();
+}
+renderMine();
 
 /* ---------- render ---------- */
 function setMeta(t){ $('meta').textContent = t; }
@@ -365,10 +416,14 @@ $('q').addEventListener('input', render);
 $('hideDead').addEventListener('change', () => { store.set('hideDead', $('hideDead').checked); render(); });
 $('srcBtn').onclick = () => $('dlg').showModal();
 $('selCountry').onchange = e => { if (e.target.value){ $('dlg').close(e.target.value); e.target.value = ''; } };
+$('selRaw').onchange = e => { if (e.target.value){ $('dlg').close(e.target.value); e.target.value = ''; } };
 $('selCat').onchange = e => { if (e.target.value){ $('dlg').close(e.target.value); e.target.value = ''; } };
 $('dlg').addEventListener('close', () => {
   const v = $('dlg').returnValue; $('dlg').returnValue = '';
-  if (v === 'custom'){ const u = $('custom').value.trim(); if (u) loadTV(u); }
+  if (v === 'custom'){
+    const u = $('custom').value.trim();
+    if (u){ saveMine(u, $('customName').value.trim()); loadTV(u); $('custom').value = $('customName').value = ''; }
+  }
   else if (v) loadTV(v);
 });
 document.querySelector('.now .t').onclick = () => { if (S.current && $('v').paused && !$('v').currentSrc) play(S.current); };
