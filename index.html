@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1216">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<title>Zender</title>
+<style>
+/* Layout: speler bovenaan (sticky), daaronder zoek + filter + zenderlijst */
+:root{
+  --bg:#0f1216; --panel:#171b21; --line:#262c35; --fg:#e8ebef; --dim:#8b95a3;
+  --accent:#4fb3a9; --live:#e5484d;
+  --sans: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 var(--sans)}
+body{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.wrap{padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.player{position:relative;aspect-ratio:16/9;background:#000;max-height:45vh;width:100%}
+video{width:100%;height:100%;display:block;background:#000}
+.now{display:flex;align-items:center;gap:10px;padding-block:8px}
+.now img{width:32px;height:32px;object-fit:contain;border-radius:6px;background:var(--panel)}
+.now .t{flex:1;min-width:0}
+.now .n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.now .s{color:var(--dim);font-size:12px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+.dot.on{background:var(--live);box-shadow:0 0 0 3px #e5484d33}
+.err{color:#ffb4b4;font-size:13px;padding-bottom:8px}
+.controls{display:grid;grid-template-columns:1fr auto;gap:8px;padding-block:10px}
+input,select,button{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.row{display:flex;gap:8px;overflow-x:auto;padding-bottom:10px;scrollbar-width:none}
+.chip{white-space:nowrap;border-radius:999px;padding:6px 12px;font-size:13px;background:var(--panel);border:1px solid var(--line);color:var(--dim)}
+.chip.on{color:var(--bg);background:var(--accent);border-color:var(--accent)}
+ul{list-style:none;margin:0;padding:0}
+li{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+li .logo{width:40px;height:40px;flex:none;border-radius:8px;background:var(--panel);object-fit:contain}
+li .t{flex:1;min-width:0;cursor:pointer}
+li .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+li .g{color:var(--dim);font-size:12px}
+li.playing .n{color:var(--accent);font-weight:600}
+.fav{background:none;border:0;font-size:20px;color:var(--dim);padding:6px}
+.fav.on{color:#f5c451}
+.meta{color:var(--dim);font-size:12px;padding-block:6px}
+dialog{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:14px;width:min(92vw,420px)}
+dialog::backdrop{background:#000a}
+.src{display:grid;gap:8px}
+.src button{text-align:left}
+</style>
+</head>
+<body>
+<header>
+  <div class="player"><video id="v" controls playsinline></video></div>
+  <div class="wrap">
+    <div class="now"><img id="nlogo" alt=""><div class="t"><div class="n" id="nname">Kies een zender</div><div class="s" id="nsub">—</div></div><span class="dot" id="dot"></span></div>
+    <div class="err" id="err" hidden></div>
+  </div>
+</header>
+<main class="wrap">
+  <div class="controls">
+    <input id="q" type="search" placeholder="Zoek zender…" autocomplete="off">
+    <button id="srcBtn" aria-label="Bron kiezen">Bron</button>
+  </div>
+  <div class="row" id="groups"></div>
+  <div class="meta" id="meta">Laden…</div>
+  <ul id="list"></ul>
+</main>
+
+<dialog id="dlg">
+  <form method="dialog" class="src" id="srcForm">
+    <strong>Playlist kiezen</strong>
+    <button value="https://iptv-org.github.io/iptv/countries/be.m3u">🇧🇪 België</button>
+    <button value="https://iptv-org.github.io/iptv/countries/nl.m3u">🇳🇱 Nederland</button>
+    <button value="https://iptv-org.github.io/iptv/languages/nld.m3u">Nederlandstalig</button>
+    <button value="https://iptv-org.github.io/iptv/categories/news.m3u">Nieuws (wereld)</button>
+    <button value="https://iptv-org.github.io/iptv/categories/sports.m3u">Sport (wereld)</button>
+    <button value="https://iptv-org.github.io/iptv/categories/movies.m3u">Films (wereld)</button>
+    <button value="https://iptv-org.github.io/iptv/index.m3u">Alles (groot, ~10k)</button>
+    <label for="custom" class="meta">Eigen M3U-link</label>
+    <input id="custom" type="url" placeholder="https://…/playlist.m3u">
+    <button value="custom">Laden</button>
+    <button value="">Annuleren</button>
+  </form>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d }catch{ return d } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)) }catch{} }
+};
+const DEFAULT = 'https://iptv-org.github.io/iptv/countries/be.m3u';
+let channels = [], group = '★', favs = new Set(store.get('favs', [])), hls = null, current = null;
+
+function parseM3U(txt){
+  const out = []; let cur = null;
+  for (const raw of txt.split(/\r?\n/)){
+    const l = raw.trim();
+    if (l.startsWith('#EXTINF')){
+      const attr = k => (l.match(new RegExp(k + '="([^"]*)"')) || [])[1] || '';
+      cur = { name: l.slice(l.lastIndexOf(',') + 1).trim() || attr('tvg-name'),
+              logo: attr('tvg-logo'), group: (attr('group-title') || 'Overig').split(';')[0] };
+    } else if (l && !l.startsWith('#') && cur){
+      cur.url = l; out.push(cur); cur = null;
+    }
+  }
+  return out;
+}
+
+async function load(url){
+  $('meta').textContent = 'Laden…'; $('list').innerHTML = '';
+  try{
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    channels = parseM3U(await r.text());
+    store.set('src', url);
+    if (group !== '★' || !channels.some(c => favs.has(c.url))) group = 'Alle';
+    render();
+  }catch(e){
+    $('meta').textContent = 'Kon playlist niet laden (' + e.message + '). Probeer een andere bron.';
+  }
+}
+
+function render(){
+  const groups = ['★', 'Alle', ...[...new Set(channels.map(c => c.group))].sort()];
+  $('groups').innerHTML = '';
+  for (const g of groups){
+    const b = document.createElement('button');
+    b.className = 'chip' + (g === group ? ' on' : ''); b.textContent = g === '★' ? '★ Favorieten' : g;
+    b.onclick = () => { group = g; render(); };
+    $('groups').append(b);
+  }
+  const q = $('q').value.toLowerCase();
+  const list = channels.filter(c =>
+    (group === 'Alle' || (group === '★' ? favs.has(c.url) : c.group === group)) &&
+    (!q || c.name.toLowerCase().includes(q)));
+  $('meta').textContent = list.length + ' zenders' + (group === '★' && !list.length ? ' — tik ☆ om favorieten toe te voegen' : '');
+  const frag = document.createDocumentFragment();
+  for (const c of list.slice(0, 600)){
+    const li = document.createElement('li');
+    if (current && current.url === c.url) li.className = 'playing';
+    li.innerHTML = `<img class="logo" loading="lazy" alt=""><div class="t"><div class="n"></div><div class="g"></div></div><button class="fav" aria-label="Favoriet"></button>`;
+    const img = li.querySelector('img');
+    if (c.logo) { img.src = c.logo; img.onerror = () => img.removeAttribute('src'); }
+    li.querySelector('.n').textContent = c.name;
+    li.querySelector('.g').textContent = c.group;
+    li.querySelector('.t').onclick = () => play(c);
+    const f = li.querySelector('.fav');
+    const paint = () => { f.textContent = favs.has(c.url) ? '★' : '☆'; f.classList.toggle('on', favs.has(c.url)); };
+    paint();
+    f.onclick = () => { favs.has(c.url) ? favs.delete(c.url) : favs.add(c.url); store.set('favs', [...favs]); paint(); };
+    frag.append(li);
+  }
+  $('list').replaceChildren(frag);
+}
+
+function showErr(msg){ $('err').textContent = msg; $('err').hidden = !msg; $('dot').classList.toggle('on', !msg && !!current); }
+
+function play(c){
+  current = c; store.set('last', c);
+  $('nname').textContent = c.name; $('nsub').textContent = c.group;
+  $('nlogo').src = c.logo || ''; showErr('');
+  const v = $('v');
+  if (hls){ hls.destroy(); hls = null; }
+  if (location.protocol === 'https:' && c.url.startsWith('http:')){
+    showErr('Deze zender gebruikt http:// en wordt door de browser geblokkeerd op een https-pagina. Kies een andere.');
+  }
+  if (window.Hls && Hls.isSupported() && /\.m3u8|\/hls|playlist/i.test(c.url)){
+    hls = new Hls({ maxBufferLength: 20 });
+    hls.on(Hls.Events.ERROR, (_, d) => {
+      if (!d.fatal) return;
+      if (d.type === Hls.ErrorTypes.MEDIA_ERROR){ hls.recoverMediaError(); return; }
+      showErr('Stream speelt niet af (offline of geblokkeerd voor browsers). Probeer een andere zender.');
+    });
+    hls.loadSource(c.url); hls.attachMedia(v);
+  } else {
+    v.src = c.url;
+  }
+  v.play().then(() => $('dot').classList.add('on')).catch(() => {});
+  render();
+}
+
+document.querySelector('.now').onclick = () => { if (current && !hls && !$('v').src) play(current); };
+$('v').addEventListener('error', () => showErr('Stream speelt niet af. Probeer een andere zender.'));
+$('q').addEventListener('input', render);
+$('srcBtn').onclick = () => $('dlg').showModal();
+$('dlg').addEventListener('close', () => {
+  const v = $('dlg').returnValue;
+  if (v === 'custom'){ const u = $('custom').value.trim(); if (u) load(u); }
+  else if (v) load(v);
+});
+
+const last = store.get('last', null);
+if (last){ current = last; $('nname').textContent = last.name; $('nsub').textContent = last.group + ' · tik om te spelen'; $('nlogo').src = last.logo || ''; }
+load(store.get('src', DEFAULT));
+</script>
+</body>
+</html>
