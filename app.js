@@ -12,6 +12,9 @@ const IPTV = 'https://iptv-org.github.io/iptv/';
 const API = 'https://iptv-org.github.io/api/';
 const RAW = new URL('streams/', location.href).href; // eigen kopie van iptv-org/iptv streams/
 const DEFAULT = RAW + 'be.m3u';
+const ALL = 'all:'; // alle lijsten uit streams/ samen
+const PAGE = 600;
+const rawLabel = n => n.replace('.m3u', '').replace('_', ' · ').toUpperCase();
 
 const VRT_RADIO = [
   { name:'Radio 1', group:'VRT · voetbal live', url:'https://icecast.vrtcdn.be/radio1-high.mp3' },
@@ -178,7 +181,9 @@ async function loadTV(src){
   if (src === MYCH){ showMyCh(); return; }
   setMeta('Laden…'); $('list').replaceChildren();
   try{
-    if (src.startsWith('local:')){
+    if (src === ALL){
+      setList(await loadAll(), 'Alle kanalen');
+    } else if (src.startsWith('local:')){
       const txt = store.get('imp:' + src.slice(6), null);
       if (!txt) throw new Error('bestand niet meer bewaard, importeer opnieuw');
       setList(parseM3U(txt), src.slice(6));
@@ -190,6 +195,19 @@ async function loadTV(src){
   }catch(e){
     setMeta('Kon lijst niet laden (' + e.message + '). Kies een andere bron.');
   }
+}
+
+// Alle losse lijsten samen; groep = de lijst waar het kanaal in staat, zodat je weet welk bestand je moet aanpassen
+async function loadAll(){
+  const names = (await get(RAW + 'index.json', { as:'json' })).filter(n => /^[a-z0-9_.-]+\.m3u$/i.test(n));
+  let done = 0;
+  const parts = await Promise.all(names.map(async n => {
+    let list = [];
+    try{ list = parseM3U(await get(RAW + n)).map(c => ({ ...c, group: rawLabel(n) })); }catch{}
+    setMeta(`Laden… ${++done}/${names.length} lijsten`);
+    return list;
+  }));
+  return parts.flat();
 }
 
 async function loadRadio(){
@@ -228,7 +246,7 @@ async function loadSourceLists(){
   try{
     const j = await get(RAW + 'index.json', { as:'json' });
     const raw = { names: j.filter(n => /^[a-z0-9_.-]+\.m3u$/i.test(n)) };
-    fillSelect($('selRaw'), `— ${raw.names.length} lijsten —`, raw.names.map(n => [RAW + n, n.replace('.m3u', '').replace('_', ' · ').toUpperCase()]));
+    fillSelect($('selRaw'), `— ${raw.names.length} lijsten —`, [[ALL, `★ ALLE KANALEN (${raw.names.length} lijsten samen)`], ...raw.names.map(n => [RAW + n, rawLabel(n)])]);
   }catch{
     fillSelect($('selRaw'), 'Niet beschikbaar', []);
   }
@@ -445,8 +463,9 @@ function logoEl(c, cls){
   return el('div', { className: cls, textContent: (c.name[0] || '?').toUpperCase() });
 }
 
-function render(){
+function render(more){
   if (S.tab === 'apps') return;
+  S.limit = more === true ? S.limit + PAGE : PAGE;
   const hid = hiddenSet();
   const all = items().map(withEdit).filter(c => !hid.has(c.url)); const g = S.group[S.tab];
   const groups = ['★', 'Recent', 'Alle', ...[...new Set(all.map(c => c.group))].sort()];
@@ -466,7 +485,7 @@ function render(){
     (deadCount ? ` · ${deadCount} defect` : '') + (susCount ? ` · ${susCount} ⚠${S.opt.hideSus ? ' verborgen' : ''}` : '') +
     (g === '★' && !list.length ? ' · tik ☆ om toe te voegen' : ''));
   const frag = document.createDocumentFragment();
-  for (const c of list.slice(0, 600)){
+  for (const c of list.slice(0, S.limit)){
     const fav = el('button', { className:'fav' }); fav.setAttribute('aria-label', 'Favoriet');
     const paint = () => { const on = S.favs.has(c.url); fav.textContent = on ? '★' : '☆'; fav.classList.toggle('on', on); };
     paint();
@@ -481,6 +500,12 @@ function render(){
     if (S.dead.has(c.url)) li.classList.add('dead');
     const why = susReason(c); if (why){ li.classList.add('sus'); li.dataset.sus = why; }
     frag.append(li);
+  }
+  if (list.length > S.limit){
+    const rest = list.length - S.limit;
+    const btn = el('button', { type:'button', textContent: `Toon nog ${Math.min(PAGE, rest)} (${rest} resterend)` });
+    btn.onclick = () => render(true);
+    frag.append(el('li', { className:'empty' }, el('div', { className:'t' }, el('div', { className:'g', textContent: `${S.limit} van ${list.length} getoond` })), btn));
   }
   $('list').replaceChildren(frag);
   if (S.tab === 'tv'){
